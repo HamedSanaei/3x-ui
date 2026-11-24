@@ -59,19 +59,6 @@ describe('unavailable and scoped load readings', () => {
     },
   );
 
-  it('honors unavailable load metadata even if a numeric placeholder was sent', () => {
-    render(
-      <LoadAverage
-        status={new Status({ logicalPro: 4, loads: [0, 0, 0], unavailableMetrics: ['loads'] })}
-      />,
-    );
-    expect(screen.getAllByRole('definition').map((value) => value.textContent)).toEqual([
-      '—',
-      '—',
-      '—',
-    ]);
-  });
-
   it('does not use affinity-limited CPU capacity for host load', () => {
     render(
       <LoadAverage

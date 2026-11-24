@@ -27,11 +27,13 @@ function LoadAveragePreview({
   logicalPro = 4,
   resourceScope = '',
   rtl = false,
+  width = 360,
 }: {
   loads: number[];
   logicalPro?: number;
   resourceScope?: string;
   rtl?: boolean;
+  width?: number;
 }) {
   const status = new Status({ loads, logicalPro, resourceScope });
   const { isMobile } = useMediaQuery();
@@ -39,7 +41,7 @@ function LoadAveragePreview({
     <I18nextProvider i18n={locales}>
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <ConfigProvider direction={rtl ? 'rtl' : 'ltr'}>
-        <div className="index-page" dir={rtl ? 'rtl' : 'ltr'} style={{ maxWidth: 360 }}>
+        <div className="index-page" dir={rtl ? 'rtl' : 'ltr'} style={{ maxWidth: width }}>
           <VitalTile
             icon={<DashboardOutlined aria-hidden />}
             label="CPU"
@@ -50,7 +52,7 @@ function LoadAveragePreview({
             footRight="Peak 89%"
             data={[35, 52, 40, 62, 89, 72]}
             isMobile={isMobile}
-            extraContent={<LoadAverage status={status} />}
+            topEnd={<LoadAverage status={status} />}
           />
         </div>
       </ConfigProvider>
@@ -77,6 +79,7 @@ const meta = {
     logicalPro: { description: 'Available logical CPUs for normalization.' },
     resourceScope: { description: 'Non-empty scope metadata disables host-load normalization.' },
     rtl: { description: 'Preview right-to-left layout.' },
+    width: { description: 'Maximum tile width in pixels.' },
   },
 } satisfies Meta<typeof LoadAveragePreview>;
 export default meta;
@@ -91,7 +94,38 @@ export const Mixed: Story = {
     await expect(canvas.getByText('72.0')).toBeVisible();
     await expect(canvas.getByText('Avg 52%')).toBeVisible();
     await expect(canvas.getByRole('img', { name: 'CPU: 72%' })).toBeVisible();
+    await expectLoadFitsTile(canvasElement, false);
   },
+};
+
+async function expectLoadFitsTile(canvas: HTMLElement, rtl: boolean) {
+  await document.fonts.ready;
+  const tile = canvas.querySelector<HTMLElement>('.ov-tile')!;
+  const load = tile.querySelector<HTMLElement>('.ov-tile-top-end')!;
+  const value = tile.querySelector<HTMLElement>('.ov-tile-value')!;
+  const detail = tile.querySelector<HTMLElement>('.ov-tile-detail')!;
+  const loadBounds = load.getBoundingClientRect();
+  const valueBounds = value.getBoundingClientRect();
+  await expect(loadBounds.bottom).toBeLessThanOrEqual(detail.getBoundingClientRect().top);
+  await expect(
+    rtl ? loadBounds.right <= valueBounds.left : loadBounds.left >= valueBounds.right,
+  ).toBe(true);
+  await expect(load.scrollWidth).toBe(load.clientWidth);
+  const detailTop = detail.getBoundingClientRect().top;
+  const tileHeight = tile.getBoundingClientRect().height;
+  load.hidden = true;
+  try {
+    await expect(detail.getBoundingClientRect().top).toBe(detailTop);
+    await expect(tile.getBoundingClientRect().height).toBe(tileHeight);
+  } finally {
+    load.hidden = false;
+  }
+}
+
+export const NarrowDark: Story = {
+  args: { width: 204, loads: [3.6, 4.01, 15.08] },
+  globals: { theme: 'dark' },
+  play: ({ canvasElement }) => expectLoadFitsTile(canvasElement, false),
 };
 export const Healthy: Story = { args: { loads: [0, 1, 2] } };
 export const NearCapacity: Story = { args: { loads: [4, 3.99, 3.6] } };
@@ -113,5 +147,6 @@ export const PersianRTL: Story = {
   },
   play: async ({ canvasElement }) => {
     await expect(within(canvasElement).getByRole('button', { name: 'میانگین بار' })).toBeVisible();
+    await expectLoadFitsTile(canvasElement, true);
   },
 };

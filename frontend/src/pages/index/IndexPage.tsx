@@ -232,7 +232,7 @@ export default function IndexPage() {
                       icon={<DashboardOutlined aria-hidden />}
                       label={t('pages.index.cpu')}
                       available={status.metricAvailable('cpu')}
-                      extraContent={<LoadAverage status={status} />}
+                      topEnd={<LoadAverage status={status} />}
                       percent={status.cpu.percent}
                       statusColor={status.cpu.color}
                       detail={

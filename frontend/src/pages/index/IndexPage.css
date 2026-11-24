@@ -216,11 +216,28 @@
   overflow: hidden;
 }
 
+.ov-tile-top {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  container-type: inline-size;
+}
+
+.ov-tile-top-end {
+  grid-area: 1 / 2 / 3;
+  align-self: start;
+  justify-self: end;
+  max-inline-size: calc(100% - var(--ov-pad));
+  margin-inline-end: var(--ov-pad);
+  padding-block-start: 12px;
+}
+
 .ov-tile-head {
+  grid-area: 1 / 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 14px var(--ov-pad) 0;
+  padding-block-start: 14px;
+  padding-inline: var(--ov-pad) 8px;
   color: var(--ov-accent);
 }
 
@@ -230,10 +247,12 @@
 }
 
 .ov-tile-value {
+  grid-area: 2 / 1;
   display: flex;
   align-items: baseline;
   gap: 4px;
-  padding: 12px var(--ov-pad) 0;
+  padding-block-start: 12px;
+  padding-inline: var(--ov-pad) 8px;
 }
 
 .ov-tile-number {
@@ -271,10 +290,6 @@
   margin-top: 6px;
 }
 
-.ov-load {
-  padding: 12px var(--ov-pad) 0;
-}
-
 .ov-load-head {
   display: flex;
   align-items: center;
@@ -294,7 +309,10 @@
   background: none;
   color: var(--ant-color-text-secondary);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: start;
   cursor: help;
 }
@@ -307,26 +325,27 @@
 
 .ov-load-values {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin: 8px 0 0;
+  grid-template-columns: repeat(3, minmax(0, max-content));
+  gap: 6px;
+  margin: 4px 0 0;
+  line-height: 1.2;
 }
 
 .ov-load-reading {
   min-inline-size: 0;
   border-block-end: 2px solid var(--load-color);
-  padding-block-end: 4px;
+  padding-block-end: 2px;
   overflow-wrap: anywhere;
 }
 
 .ov-load-reading dt {
   color: var(--ant-color-text-secondary);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .ov-load-reading dd {
-  margin: 2px 0 0;
-  font-size: 14px;
+  margin: 0;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   direction: ltr;
@@ -336,6 +355,31 @@
 
 .ov-load-reading[data-severity='unavailable'] dd {
   color: var(--ant-color-text-secondary);
+}
+
+@container (max-width: 230px) {
+  .ov-tile-top-end {
+    padding-block-start: 8px;
+  }
+
+  .ov-load-values {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+    margin-block-start: 2px;
+  }
+
+  .ov-load-reading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px;
+    border-block-end: 0;
+    padding-block-end: 0;
+  }
+
+  .ov-load-reading dt {
+    white-space: nowrap;
+  }
 }
 
 /* — throughput + connections — */

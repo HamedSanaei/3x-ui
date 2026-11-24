@@ -12,7 +12,7 @@ interface VitalTileProps {
   percent: number;
   statusColor: string;
   detail: string;
-  extraContent?: ReactNode;
+  topEnd?: ReactNode;
   footLeft: string;
   footRight: string;
   data: number[];
@@ -26,7 +26,7 @@ export default function VitalTile({
   percent,
   statusColor,
   detail,
-  extraContent,
+  topEnd,
   footLeft,
   footRight,
   data,
@@ -49,21 +49,22 @@ export default function VitalTile({
       role="group"
       aria-labelledby={labelId}
     >
-      <div className="ov-tile-head">
-        <span className="ov-tile-icon">{icon}</span>
-        <span className="ov-kicker" id={labelId}>
-          {label}
-        </span>
-      </div>
+      <div className="ov-tile-top">
+        <div className="ov-tile-head">
+          <span className="ov-tile-icon">{icon}</span>
+          <span className="ov-kicker" id={labelId}>
+            {label}
+          </span>
+        </div>
 
-      <div className="ov-tile-value">
-        <span className="ov-tile-number">{available ? percent.toFixed(1) : '—'}</span>
-        {available && <span className="ov-tile-unit">%</span>}
+        <div className="ov-tile-value">
+          <span className="ov-tile-number">{available ? percent.toFixed(1) : '—'}</span>
+          {available && <span className="ov-tile-unit">%</span>}
+        </div>
+        {topEnd && <div className="ov-tile-top-end">{topEnd}</div>}
       </div>
 
       <div className="ov-tile-detail">{available ? detail : '—'}</div>
-
-      {extraContent}
 
       <div className="ov-tile-foot">
         <span>{available ? footLeft : '—'}</span>

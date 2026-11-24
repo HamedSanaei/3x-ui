@@ -113,11 +113,13 @@ normal network requests.
 ## Overview load averages
 
 The CPU tile keeps its utilization percentage, recent average/peak and sparkline,
-and shows raw 1-, 5- and 15-minute load averages from the existing status feed.
+and shows raw 1-, 5- and 15-minute load averages in the top end of the tile,
+using the existing status feed.
 Load is a task count, not a utilization percentage. Each value has its own
 capacity color; the small marker follows the one-minute reading. Dividing by
-available logical CPUs gives green through 0.50, a green-to-yellow gradient to
-0.70, yellow-to-orange to 0.85, orange through exactly 1.00, and red above 1.00.
+available logical CPUs gives the theme's success color through 0.50, a blend to
+warning at 0.70 and to active warning at 0.85, active warning through 1.00, and
+the theme's error color above 1.00.
 Only display formatting rounds the raw measurements to two decimal places.
 
 Missing or invalid readings show a neutral dash. LXC/container or unknown CPU

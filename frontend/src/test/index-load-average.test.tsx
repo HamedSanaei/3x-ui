@@ -43,6 +43,7 @@ it('adds independently colored loads only to CPU and refreshes with the existing
   const { container, rerender } = render(<IndexPage />, { wrapper: ThemeProvider });
   const title = screen.getByRole('button', { name: 'Load Average' });
   const tile = title.closest('.ov-tile')!;
+  expect(title.closest('.ov-tile-top')).toBe(tile.querySelector('.ov-tile-value')?.parentElement);
   const cpu = within(tile as HTMLElement);
   expect(cpu.getByText('72.0')).toBeTruthy();
   expect(cpu.getByText('2 Cores / 4T · 0.00 MHz')).toBeTruthy();
@@ -53,7 +54,11 @@ it('adds independently colored loads only to CPU and refreshes with the existing
     Array.from(tile.querySelectorAll<HTMLElement>('.ov-load-reading')).map((reading) =>
       reading.style.getPropertyValue('--load-color'),
     ),
-  ).toEqual(['#22c55e', '#f97316', '#ef4444']);
+  ).toEqual([
+    'var(--ant-color-success)',
+    'var(--ant-color-warning-active)',
+    'var(--ant-color-error)',
+  ]);
   expect(
     cpu.getByRole('img', { name: 'Load Average (1m): Healthy' }).getAttribute('data-severity'),
   ).toBe('healthy');

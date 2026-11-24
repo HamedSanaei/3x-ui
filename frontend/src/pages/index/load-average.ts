@@ -13,17 +13,13 @@ interface LoadAppearance {
   color: string | null;
 }
 
-function interpolate(from: number[], to: number[], fraction: number): string {
-  return (
-    '#' +
-    from
-      .map((channel, i) =>
-        Math.round(channel + (to[i] - channel) * fraction)
-          .toString(16)
-          .padStart(2, '0'),
-      )
-      .join('')
-  );
+const healthyColor = 'var(--ant-color-success)';
+const warningColor = 'var(--ant-color-warning)';
+const nearCapacityColor = 'var(--ant-color-warning-active)';
+const aboveCapacityColor = 'var(--ant-color-error)';
+
+function interpolate(from: string, to: string, fraction: number): string {
+  return `color-mix(in srgb, ${to} ${(fraction * 100).toFixed(3)}%, ${from})`;
 }
 
 export function loadAppearance(
@@ -42,21 +38,21 @@ export function loadAppearance(
   )
     return neutral;
   const ratio = value / logicalCPUs;
-  if (ratio > 1) return { value, ratio, severity: 'aboveCapacity', color: '#ef4444' };
-  if (ratio >= 0.85) return { value, ratio, severity: 'nearCapacity', color: '#f97316' };
+  if (ratio > 1) return { value, ratio, severity: 'aboveCapacity', color: aboveCapacityColor };
+  if (ratio >= 0.85) return { value, ratio, severity: 'nearCapacity', color: nearCapacityColor };
   if (ratio >= 0.7)
     return {
       value,
       ratio,
       severity: 'elevated',
-      color: interpolate([234, 179, 8], [249, 115, 22], (ratio - 0.7) / 0.15),
+      color: interpolate(warningColor, nearCapacityColor, (ratio - 0.7) / 0.15),
     };
   if (ratio > 0.5)
     return {
       value,
       ratio,
       severity: 'increasing',
-      color: interpolate([34, 197, 94], [234, 179, 8], (ratio - 0.5) / 0.2),
+      color: interpolate(healthyColor, warningColor, (ratio - 0.5) / 0.2),
     };
-  return { value, ratio, severity: 'healthy', color: '#22c55e' };
+  return { value, ratio, severity: 'healthy', color: healthyColor };
 }

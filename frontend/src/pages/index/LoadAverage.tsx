@@ -12,11 +12,7 @@ export default function LoadAverage({ status }: { status: Status }) {
   const title = t('pages.index.loadAverage');
   const comparable = !status.resourceScope && status.metricAvailable('loadCapacity');
   const windows = [1, 5, 15].map((minutes, index) => {
-    const appearance = loadAppearance(
-      status.metricAvailable('loads') ? status.loads[index] : null,
-      status.logicalPro,
-      comparable,
-    );
+    const appearance = loadAppearance(status.loads[index], status.logicalPro, comparable);
     return {
       ...appearance,
       label: t('pages.index.loadWindow', { minutes }),

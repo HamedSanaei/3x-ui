@@ -10,24 +10,20 @@ describe('load capacity warnings', () => {
     expect(loadAppearance(cpus, cpus)).toMatchObject({
       ratio: 1,
       severity: 'nearCapacity',
-      color: '#f97316',
+      color: 'var(--ant-color-warning-active)',
     });
     expect(loadAppearance(cpus + 0.01, cpus).severity).toBe('aboveCapacity');
   });
 
   it.each([
-    [0, '#22c55e'],
-    [1, '#22c55e'],
-    [2, '#22c55e'],
-    [2.4, '#86bc33'],
-    [2.8, '#eab308'],
-    [3.1, '#f2930f'],
-    [3.6, '#f97316'],
-    [3.99, '#f97316'],
-    [4, '#f97316'],
-    [4.01, '#ef4444'],
-    [4.5, '#ef4444'],
-    [6, '#ef4444'],
+    [0, 'var(--ant-color-success)'],
+    [2, 'var(--ant-color-success)'],
+    [2.4, 'color-mix(in srgb, var(--ant-color-warning) 50.000%, var(--ant-color-success))'],
+    [2.8, 'color-mix(in srgb, var(--ant-color-warning-active) 0.000%, var(--ant-color-warning))'],
+    [3.1, 'color-mix(in srgb, var(--ant-color-warning-active) 50.000%, var(--ant-color-warning))'],
+    [3.6, 'var(--ant-color-warning-active)'],
+    [4, 'var(--ant-color-warning-active)'],
+    [4.01, 'var(--ant-color-error)'],
   ])('colors raw load %s on four CPUs as %s', (load, color) => {
     expect(loadAppearance(load, 4).color).toBe(color);
   });
