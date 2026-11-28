@@ -134,6 +134,8 @@ func run(root, outDir string) error {
 				"HwidSlotStatus",
 				"ClientUsageHistory",
 				"ClientNodeUsage",
+				"SubBalancerWithProblems",
+				"SubBalancerProblem",
 			),
 			AliasAllow: setOf("ProcessState"),
 		},
