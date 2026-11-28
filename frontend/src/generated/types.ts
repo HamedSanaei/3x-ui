@@ -454,6 +454,7 @@ export interface AttachCandidate {
   enable: boolean;
   group: string;
   id: number;
+  inScope: boolean;
 }
 
 export interface AttachCandidatePage {

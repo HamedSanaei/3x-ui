@@ -26,6 +26,9 @@ type AttachCandidateParams struct {
 	Search   string `form:"search"`
 	Group    string `form:"group"`
 	Freeze   bool   `form:"freeze"`
+	// The filter a frozen selection was taken under, which marks rows inScope.
+	ScopeSearch string `form:"scopeSearch"`
+	ScopeGroup  string `form:"scopeGroup"`
 }
 
 type AttachCandidate struct {
@@ -35,6 +38,7 @@ type AttachCandidate struct {
 	Comment         string `json:"comment" example:"Example client"`
 	Enable          bool   `json:"enable" example:"true"`
 	AlreadyAttached bool   `json:"alreadyAttached" example:"false"`
+	InScope         bool   `json:"inScope" example:"true"`
 }
 
 type AttachCandidatePage struct {
@@ -52,6 +56,8 @@ type AttachSelection struct {
 	ClientIDs         []int  `json:"clientIds"`
 	ExcludedClientIDs []int  `json:"excludedClientIds"`
 	ScopeToken        string `json:"scopeToken"`
+	Search            string `json:"search"`
+	Group             string `json:"group"`
 }
 
 type AttachSelectionResult struct {
@@ -108,6 +114,40 @@ func eligibleAttachCandidates(q *gorm.DB, targets []int) *gorm.DB {
 	return q
 }
 
+// attachFilter is the search and group predicate of a candidate page or a frozen scope.
+func attachFilter(sourceID int, search, group string) (string, []any) {
+	var clauses []string
+	var args []any
+	if sourceID == 0 && group != "" {
+		clauses = append(clauses, "c.group_name = ?")
+		args = append(args, group)
+	}
+	if search = strings.TrimSpace(search); search != "" {
+		col := "c.group_name"
+		if sourceID > 0 {
+			col = "c.comment"
+		}
+		const like = " LIKE ? ESCAPE '\\'"
+		predicates := []string{"LOWER(c.email)" + like, "LOWER(" + col + ")" + like}
+		pattern := "%" + escapeLikeLiteral(strings.ToLower(search)) + "%"
+		args = append(args, pattern, pattern)
+		for _, variant := range caseVariants(search) {
+			pattern := "%" + escapeLikeLiteral(variant) + "%"
+			predicates = append(predicates, "c.email"+like, col+like)
+			args = append(args, pattern, pattern)
+		}
+		clauses = append(clauses, "("+strings.Join(predicates, " OR ")+")")
+	}
+	return strings.Join(clauses, " AND "), args
+}
+
+func filteredAttachCandidates(q *gorm.DB, sourceID int, search, group string) *gorm.DB {
+	if filter, args := attachFilter(sourceID, search, group); filter != "" {
+		return q.Where(filter, args...)
+	}
+	return q
+}
+
 func writeAttachID(h hash.Hash, id int) {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], uint64(id))
@@ -125,7 +165,8 @@ func attachScopeHash(sourceID int, targets []int) hash.Hash {
 }
 
 func (s *ClientService) ListAttachCandidates(ctx context.Context, p AttachCandidateParams) (*AttachCandidatePage, error) {
-	if p.Page < 0 || p.Page > 1_000_000 || len(p.Search) > 256 || len(p.Group) > 256 {
+	if p.Page < 0 || p.Page > 1_000_000 || len(p.Search) > 256 || len(p.Group) > 256 ||
+		len(p.ScopeSearch) > 256 || len(p.ScopeGroup) > 256 {
 		return nil, fmt.Errorf("invalid client attachment page")
 	}
 	db := database.GetDB().WithContext(ctx)
@@ -150,7 +191,7 @@ func (s *ClientService) ListAttachCandidates(ctx context.Context, p AttachCandid
 			return nil, fmt.Errorf("select attachment targets first")
 		}
 		h := attachScopeHash(p.SourceID, targets)
-		rows, err := eligible.Select("c.id").Order("c.id").Rows()
+		rows, err := filteredAttachCandidates(eligible, p.SourceID, p.Search, p.Group).Select("c.id").Order("c.id").Rows()
 		if err != nil {
 			return nil, err
 		}
@@ -175,41 +216,30 @@ func (s *ClientService) ListAttachCandidates(ctx context.Context, p AttachCandid
 		return nil, err
 	}
 
-	filtered := attachCandidates(db, p.SourceID)
 	if p.SourceID == 0 {
 		if err := attachCandidates(db, 0).Where("c.group_name <> ''").
 			Distinct("c.group_name").Order("c.group_name").Limit(100).Pluck("c.group_name", &resp.Groups).Error; err != nil {
 			return nil, err
 		}
-		if p.Group != "" {
-			filtered = filtered.Where("c.group_name = ?", p.Group)
-		}
 	}
-	if search := strings.TrimSpace(p.Search); search != "" {
-		col := "c.group_name"
-		if p.SourceID > 0 {
-			col = "c.comment"
-		}
-		const like = " LIKE ? ESCAPE '\\'"
-		predicates := []string{"LOWER(c.email)" + like, "LOWER(" + col + ")" + like}
-		pattern := "%" + escapeLikeLiteral(strings.ToLower(search)) + "%"
-		args := []any{pattern, pattern}
-		for _, variant := range caseVariants(search) {
-			pattern := "%" + escapeLikeLiteral(variant) + "%"
-			predicates = append(predicates, "c.email"+like, col+like)
-			args = append(args, pattern, pattern)
-		}
-		filtered = filtered.Where("("+strings.Join(predicates, " OR ")+")", args...)
-	}
+	filtered := filteredAttachCandidates(attachCandidates(db, p.SourceID), p.SourceID, p.Search, p.Group)
 	if err := filtered.Count(&resp.Total).Error; err != nil {
 		return nil, err
 	}
-	columns := "c.id, c.email, c.group_name AS \"group\", c.comment, c.enable, "
+	columns, args := "c.id, c.email, c.group_name AS \"group\", c.comment, c.enable, ", []any{}
 	if len(targets) == 0 {
-		filtered = filtered.Select(columns + "false AS already_attached")
+		columns += "false AS already_attached, "
 	} else {
-		filtered = filtered.Select(columns+attachedToTargetsSQL+" AS already_attached", targets, len(targets))
+		columns += attachedToTargetsSQL + " AS already_attached, "
+		args = append(args, targets, len(targets))
 	}
+	if scope, scopeArgs := attachFilter(p.SourceID, p.ScopeSearch, p.ScopeGroup); scope == "" {
+		columns += "true AS in_scope"
+	} else {
+		columns += "(" + scope + ") AS in_scope"
+		args = append(args, scopeArgs...)
+	}
+	filtered = filtered.Select(columns, args...)
 	err = filtered.Order("c.id").Offset(max(0, p.Page-1) * attachCandidatePageSize).
 		Limit(attachCandidatePageSize).Scan(&resp.Items).Error
 	return resp, err
@@ -229,7 +259,8 @@ func (s *ClientService) BulkAttachSelection(ctx context.Context, inboundSvc *Inb
 	var records []*model.ClientRecord
 	switch selection.Mode {
 	case "explicit":
-		if len(selection.ClientIDs) == 0 || len(selection.ClientIDs) > 50_000 || selection.ScopeToken != "" || len(selection.ExcludedClientIDs) > 0 {
+		if len(selection.ClientIDs) == 0 || len(selection.ClientIDs) > 50_000 || selection.ScopeToken != "" ||
+			len(selection.ExcludedClientIDs) > 0 || selection.Search != "" || selection.Group != "" {
 			return nil, false, fmt.Errorf("invalid explicit client attachment selection")
 		}
 		ids := uniqueInts(selection.ClientIDs)
@@ -247,7 +278,7 @@ func (s *ClientService) BulkAttachSelection(ctx context.Context, inboundSvc *Inb
 		cutoff, digest, ok := strings.Cut(selection.ScopeToken, ".")
 		maxID, parseErr := strconv.Atoi(cutoff)
 		if !ok || parseErr != nil || maxID < 0 || len(digest) != sha256.Size*2 || len(selection.ClientIDs) > 0 ||
-			len(selection.ExcludedClientIDs) > 50_000 {
+			len(selection.ExcludedClientIDs) > 50_000 || len(selection.Search) > 256 || len(selection.Group) > 256 {
 			return nil, false, fmt.Errorf("invalid all-clients attachment selection")
 		}
 		excluded := make(map[int]struct{}, len(selection.ExcludedClientIDs))
@@ -257,6 +288,7 @@ func (s *ClientService) BulkAttachSelection(ctx context.Context, inboundSvc *Inb
 		h := attachScopeHash(selection.SourceID, targets)
 		// Find runs the model's read hooks. The cutoff excludes newer clients.
 		var eligibleRecords []*model.ClientRecord
+		q = filteredAttachCandidates(q, selection.SourceID, selection.Search, selection.Group)
 		if err := q.Where("c.id <= ?", maxID).Order("c.id").Find(&eligibleRecords).Error; err != nil {
 			return nil, false, err
 		}

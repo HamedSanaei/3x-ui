@@ -32,6 +32,7 @@ interface Candidate {
   group: string;
   enable: boolean;
   alreadyAttached: boolean;
+  inScope: boolean;
 }
 
 interface CandidatePage {
@@ -53,6 +54,12 @@ interface FrozenSelection {
   token: string;
   eligible: number;
   maxId: number;
+  search: string;
+  group: string;
+}
+
+function inFrozenScope(frozen: FrozenSelection, row: Candidate) {
+  return row.inScope && row.id <= frozen.maxId;
 }
 
 interface AttachClientPickerProps {
@@ -86,6 +93,8 @@ export default function AttachClientPickerModal({
   const [choices, setChoices] = useState(new Map<number, string>());
   const [exclusionPage, setExclusionPage] = useState(1);
   const selected = frozen ? frozen.eligible - choices.size : choices.size;
+  const scopeSearch = frozen?.search ?? '';
+  const scopeGroup = frozen?.group ?? '';
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +102,15 @@ export default function AttachClientPickerModal({
       () => {
         HttpUtil.get(
           CANDIDATES,
-          { sourceId, inboundIds: targetScope, page, search, group },
+          {
+            sourceId,
+            inboundIds: targetScope,
+            page,
+            search,
+            group,
+            scopeSearch,
+            scopeGroup,
+          },
           { silent: true },
         )
           .then((response) => {
@@ -116,7 +133,7 @@ export default function AttachClientPickerModal({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [sourceId, targetScope, page, search, group, t]);
+  }, [sourceId, targetScope, page, search, group, scopeSearch, scopeGroup, t]);
 
   function clear() {
     setFrozen(undefined);
@@ -136,7 +153,7 @@ export default function AttachClientPickerModal({
     setChoices((current) => {
       const next = new Map(current);
       for (const row of rows?.items ?? []) {
-        if (row.alreadyAttached || (frozen && row.id > frozen.maxId)) continue;
+        if (row.alreadyAttached || (frozen && !inFrozenScope(frozen, row))) continue;
         if (frozen ? !checked.has(row.id) : checked.has(row.id)) next.set(row.id, row.email);
         else next.delete(row.id);
       }
@@ -151,7 +168,7 @@ export default function AttachClientPickerModal({
     try {
       const response = await HttpUtil.get(
         CANDIDATES,
-        { sourceId, inboundIds: targetScope, freeze: true },
+        { sourceId, inboundIds: targetScope, search, group, freeze: true },
         { silent: true },
       );
       const scope = response?.obj as CandidatePage | undefined;
@@ -160,7 +177,13 @@ export default function AttachClientPickerModal({
         return;
       }
       clear();
-      setFrozen({ token: scope.scopeToken, eligible: scope.eligible, maxId: scope.maxId ?? 0 });
+      setFrozen({
+        token: scope.scopeToken,
+        eligible: scope.eligible,
+        maxId: scope.maxId ?? 0,
+        search,
+        group,
+      });
     } finally {
       action.current = false;
       setBusy(undefined);
@@ -178,6 +201,8 @@ export default function AttachClientPickerModal({
             sourceId,
             scopeToken: frozen.token,
             excludedClientIds: [...choices.keys()],
+            search: frozen.search,
+            group: frozen.group,
           }
         : { mode: 'explicit', sourceId, clientIds: [...choices.keys()] };
       const response = await HttpUtil.post<{ jobId: string }>(
@@ -220,7 +245,11 @@ export default function AttachClientPickerModal({
       const { attached, skipped, errors } = result;
       if (errors > 0)
         messages.warning(
-          t('pages.inbounds.attachClientsResultMixed', { attached, skipped, errors }),
+          t('pages.inbounds.attachClientsResultMixed', {
+            attached,
+            skipped,
+            errors,
+          }),
         );
       else messages.success(t('pages.inbounds.attachClientsResult', { attached, skipped }));
       onAttached?.();
@@ -252,7 +281,10 @@ export default function AttachClientPickerModal({
   const label = formatInboundLabel(inbound.tag, inbound.remark);
   const targetOptions = sourceInbounds
     ?.filter((item) => item.id !== sourceId && isInboundMultiUser(item))
-    .map((item) => ({ value: item.id, label: formatInboundLabel(item.tag, item.remark) }));
+    .map((item) => ({
+      value: item.id,
+      label: formatInboundLabel(item.tag, item.remark),
+    }));
   const lastExclusionPage = Math.max(1, Math.ceil(choices.size / 10));
   const currentExclusionPage = Math.min(exclusionPage, lastExclusionPage);
   const exclusions = frozen
@@ -343,7 +375,7 @@ export default function AttachClientPickerModal({
             onClick={() => {
               selectRows(
                 (rows?.items ?? [])
-                  .filter((row) => !row.alreadyAttached && (!frozen || row.id <= frozen.maxId))
+                  .filter((row) => !row.alreadyAttached && (!frozen || inFrozenScope(frozen, row)))
                   .map((row) => row.id),
               );
             }}
@@ -405,7 +437,9 @@ export default function AttachClientPickerModal({
                 .filter(
                   (row) =>
                     !row.alreadyAttached &&
-                    (frozen ? row.id <= frozen.maxId && !choices.has(row.id) : choices.has(row.id)),
+                    (frozen
+                      ? inFrozenScope(frozen, row) && !choices.has(row.id)
+                      : choices.has(row.id)),
                 )
                 .map((row) => row.id),
               onChange: selectRows,
@@ -415,7 +449,7 @@ export default function AttachClientPickerModal({
                   loading ||
                   !targets.length ||
                   row.alreadyAttached ||
-                  (!!frozen && row.id > frozen.maxId),
+                  (!!frozen && !inFrozenScope(frozen, row)),
                 'aria-label': row.email,
               }),
             }}

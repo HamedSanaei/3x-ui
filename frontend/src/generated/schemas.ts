@@ -1902,6 +1902,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "id": {
         "example": 1,
         "type": "integer"
+      },
+      "inScope": {
+        "example": true,
+        "type": "boolean"
       }
     },
     "required": [
@@ -1910,7 +1914,8 @@ export const SCHEMAS: Record<string, unknown> = {
       "email",
       "enable",
       "group",
-      "id"
+      "id",
+      "inScope"
     ],
     "type": "object"
   },

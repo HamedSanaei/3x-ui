@@ -1024,7 +1024,7 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/clients/attachCandidates',
         summary:
-          'List up to 100 clients for the inbound attachment picker. Counts distinguish filtered rows and all eligible clients. A freeze request returns only the eligible count, maximum ID and a scope token covering the current eligible IDs for the chosen source and targets.',
+          'List up to 100 clients for the inbound attachment picker. Counts distinguish filtered rows and all eligible clients. A freeze request returns only the eligible count, maximum ID and a scope token covering the eligible IDs that match the given search and group for the chosen source and targets.',
         params: [
           {
             name: 'sourceId',
@@ -1065,7 +1065,21 @@ export const sections: readonly Section[] = [
             name: 'freeze',
             in: 'query',
             type: 'boolean',
-            desc: 'Freeze all eligible IDs independently of search, page and group.',
+            desc: 'Freeze the eligible IDs matching search and group, independently of page.',
+            optional: true,
+          },
+          {
+            name: 'scopeSearch',
+            in: 'query',
+            type: 'string',
+            desc: 'Search a frozen selection was taken under; rows outside it report inScope false.',
+            optional: true,
+          },
+          {
+            name: 'scopeGroup',
+            in: 'query',
+            type: 'string',
+            desc: 'Group a frozen selection was taken under; rows outside it report inScope false.',
             optional: true,
           },
         ],
@@ -1701,7 +1715,7 @@ export const sections: readonly Section[] = [
         method: 'POST',
         path: '/panel/api/clients/bulkAttach',
         summary:
-          'Attach many existing clients to many inbounds in one call. Each client keeps its identity (email/UUID/password/subId) and a shared traffic row; all clients are added to a target inbound in a single AddInboundClient call. Clients already present on a target are reported under skipped. Explicit email requests return per-email lists. Alternatively submit selection with explicit clientIds or a frozen allMatching scopeToken plus excludedClientIds. Scoped requests start a background job and return {jobId}. Poll GET /bulkAttach/:id for counts or a stale-selection error. Newer IDs stay outside the frozen scope. Changes to the frozen membership are rejected before applying changes. Triggers a single Xray restart if any target inbound was running.',
+          'Attach many existing clients to many inbounds in one call. Each client keeps its identity (email/UUID/password/subId) and a shared traffic row; all clients are added to a target inbound in a single AddInboundClient call. Clients already present on a target are reported under skipped. Explicit email requests return per-email lists. Alternatively submit selection with explicit clientIds or a frozen allMatching scopeToken plus excludedClientIds and the search and group it was frozen under. Scoped requests start a background job and return {jobId}. Poll GET /bulkAttach/:id for counts or a stale-selection error. Newer IDs stay outside the frozen scope. Changes to the frozen membership are rejected before applying changes. Triggers a single Xray restart if any target inbound was running.',
         params: [
           {
             name: 'emails',
@@ -1714,7 +1728,7 @@ export const sections: readonly Section[] = [
             name: 'selection',
             in: 'body (json)',
             type: 'object',
-            desc: 'Either {mode: "explicit", clientIds, sourceId?} or {mode: "allMatching", scopeToken, excludedClientIds?, sourceId?}.',
+            desc: 'Either {mode: "explicit", clientIds, sourceId?} or {mode: "allMatching", scopeToken, excludedClientIds?, search?, group?, sourceId?}.',
             optional: true,
           },
           {

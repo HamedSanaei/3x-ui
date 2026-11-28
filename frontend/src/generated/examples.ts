@@ -458,7 +458,8 @@ export const EXAMPLES: Record<string, unknown> = {
     "email": "alice@example.test",
     "enable": true,
     "group": "staff",
-    "id": 1
+    "id": 1,
+    "inScope": true
   },
   "AttachCandidatePage": {
     "eligible": 118,
@@ -472,7 +473,8 @@ export const EXAMPLES: Record<string, unknown> = {
         "email": "alice@example.test",
         "enable": true,
         "group": "staff",
-        "id": 1
+        "id": 1,
+        "inScope": true
       }
     ],
     "maxId": 0,

@@ -73,7 +73,6 @@ func testAttachCandidatesSelection(t *testing.T) {
 	}
 
 	p.Freeze = true
-	p.Search = "ignored"
 	scope, err := svc.ListAttachCandidates(ctx, p)
 	if err != nil || scope.Eligible != 120 || len(scope.Items) != 0 || scope.ScopeToken == "" {
 		t.Fatalf("freeze = %+v, err=%v", scope, err)
@@ -130,6 +129,82 @@ func testAttachCandidatesSelection(t *testing.T) {
 	result, _, err = svc.BulkAttachSelection(ctx, inboundSvc, []int{target.Id}, explicit)
 	if err != nil || result.Attached != 1 {
 		t.Fatalf("explicit attachment = %+v, err=%v", result, err)
+	}
+}
+
+func TestFrozenAttachSelectionFollowsFilter(t *testing.T) {
+	setupBulkDB(t)
+	testFrozenAttachSelectionFollowsFilter(t)
+}
+
+func TestFrozenAttachSelectionFollowsFilterPostgres(t *testing.T) {
+	durablePostgresDB(t)
+	testFrozenAttachSelectionFollowsFilter(t)
+}
+
+func testFrozenAttachSelectionFollowsFilter(t *testing.T) {
+	t.Helper()
+	db := database.GetDB()
+	ctx := context.Background()
+	svc := &ClientService{}
+	suffix := time.Now().UnixNano()
+	source := durableTestInbound(nil, fmt.Sprintf("filter-source-%d", suffix), 42544)
+	target := durableTestInbound(nil, fmt.Sprintf("filter-target-%d", suffix), 42545)
+	if err := db.Create(source).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(target).Error; err != nil {
+		t.Fatal(err)
+	}
+	staff := fmt.Sprintf("staff-%d", suffix)
+	email := func(i int) string { return fmt.Sprintf("filter-%d-%d@x", suffix, i) }
+	clients := make([]model.Client, 6)
+	for i := range clients {
+		clients[i] = model.Client{
+			Email: email(i), SubID: fmt.Sprintf("filter%d", i), Enable: true, Group: staff,
+			ID: fmt.Sprintf("22222222-2222-4222-8222-%012d", i),
+		}
+	}
+	clients[1].Group, clients[3].Group = "guests", ""
+	if err := svc.SyncInbound(nil, source.Id, clients); err != nil {
+		t.Fatal(err)
+	}
+	targets := strconv.Itoa(target.Id)
+	search := fmt.Sprintf("FILTER-%d", suffix)
+	scope, err := svc.ListAttachCandidates(ctx, AttachCandidateParams{Targets: targets, Group: staff, Search: search, Freeze: true})
+	if err != nil || scope.Eligible != 4 {
+		t.Fatalf("frozen group scope = %+v, err=%v, want the 4 staff clients", scope, err)
+	}
+	page, err := svc.ListAttachCandidates(ctx, AttachCandidateParams{Targets: targets, Search: search, ScopeGroup: staff, ScopeSearch: search})
+	if err != nil || len(page.Items) != 6 {
+		t.Fatalf("unfiltered page under a frozen scope = %+v, err=%v", page, err)
+	}
+	for i, row := range page.Items {
+		if row.InScope != (i != 1 && i != 3) {
+			t.Fatalf("row %d %s inScope = %t", i, row.Email, row.InScope)
+		}
+	}
+	inboundSvc := &InboundService{}
+	request := AttachSelection{Mode: "allMatching", ScopeToken: scope.ScopeToken, ExcludedClientIDs: []int{page.Items[0].ID}}
+	if _, _, err := svc.BulkAttachSelection(ctx, inboundSvc, []int{target.Id}, request); err == nil {
+		t.Fatal("a frozen token was accepted without the filter it was taken under")
+	}
+	request.Group, request.Search = staff, search
+	result, _, err := svc.BulkAttachSelection(ctx, inboundSvc, []int{target.Id}, request)
+	if err != nil || result.Attached != 3 || result.Errors != 0 {
+		t.Fatalf("filtered attach = %+v, err=%v", result, err)
+	}
+	got, err := svc.ListForInbound(nil, target.Id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var emails []string
+	for _, row := range got {
+		emails = append(emails, row.Email)
+	}
+	slices.Sort(emails)
+	if want := []string{email(2), email(4), email(5)}; !slices.Equal(emails, want) {
+		t.Fatalf("target clients = %v, want %v", emails, want)
 	}
 }
 

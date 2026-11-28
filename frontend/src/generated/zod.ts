@@ -469,6 +469,7 @@ export const AttachCandidateSchema = z.object({
   enable: z.boolean(),
   group: z.string(),
   id: z.number().int(),
+  inScope: z.boolean(),
 });
 export type AttachCandidate = z.infer<typeof AttachCandidateSchema>;
 

@@ -22,14 +22,27 @@ function inbound(id: number) {
   });
 }
 
-function candidate(id: number, email: string, alreadyAttached = false) {
-  return { id, email, alreadyAttached, enable: true, group: 'fixture', comment: '' };
+function candidate(id: number, email: string, alreadyAttached = false, inScope = true) {
+  return {
+    id,
+    email,
+    alreadyAttached,
+    inScope,
+    enable: true,
+    group: 'fixture',
+    comment: '',
+  };
 }
 
 const alice = candidate(1, 'alice@test');
 const bob = candidate(119, 'bob@test');
 const attached = candidate(2, 'attached@test', true);
-const page = { items: [alice, attached], eligible: 9999, total: 10000, groups: ['fixture'] };
+const page = {
+  items: [alice, attached],
+  eligible: 9999,
+  total: 10000,
+  groups: ['fixture'],
+};
 const url = '/panel/api/clients/attachCandidates';
 
 afterEach(() => vi.restoreAllMocks());
@@ -54,7 +67,10 @@ describe('inbound client attachment picker', () => {
       if (path.endsWith('/job-123'))
         return {
           success: true,
-          obj: { running: false, result: { attached: 9997, skipped: 0, errors: 0 } },
+          obj: {
+            running: false,
+            result: { attached: 9997, skipped: 0, errors: 0 },
+          },
         } as never;
       const p = raw as { freeze?: boolean; search?: string };
       return {
@@ -73,10 +89,16 @@ describe('inbound client attachment picker', () => {
     const close = vi.fn();
     renderWithProviders(<AttachExistingClientsModal open target={inbound(8)} onClose={close} />);
     await screen.findByText('alice@test');
-    const aliceBox = screen.getByRole('checkbox', { name: 'alice@test' }) as HTMLInputElement;
+    const aliceBox = screen.getByRole('checkbox', {
+      name: 'alice@test',
+    }) as HTMLInputElement;
     expect(aliceBox.checked).toBe(false);
     expect(
-      (screen.getByRole('checkbox', { name: 'attached@test' }) as HTMLInputElement).disabled,
+      (
+        screen.getByRole('checkbox', {
+          name: 'attached@test',
+        }) as HTMLInputElement
+      ).disabled,
     ).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: /select all eligible clients/i }));
     await waitFor(() => expect(aliceBox.checked).toBe(true));
@@ -106,6 +128,95 @@ describe('inbound client attachment picker', () => {
           sourceId: 0,
           scopeToken: 'frozen-token',
           excludedClientIds: [1, 119],
+          search: '',
+          group: '',
+        },
+      },
+      expect.anything(),
+    );
+  });
+  it('freezes Select All to the active search and keeps other rows out of the selection', async () => {
+    const get = vi.spyOn(HttpUtil, 'get').mockImplementation(async (path, raw) => {
+      if (path.endsWith('/job-9'))
+        return {
+          success: true,
+          obj: {
+            running: false,
+            result: { attached: 1, skipped: 0, errors: 0 },
+          },
+        } as never;
+      const p = raw as {
+        freeze?: boolean;
+        search?: string;
+        scopeSearch?: string;
+      };
+      if (p.freeze)
+        return {
+          success: true,
+          obj: {
+            ...page,
+            items: [],
+            eligible: 1,
+            scopeToken: 'bob-token',
+            maxId: 10000,
+          },
+        } as never;
+      if (p.search)
+        return {
+          success: true,
+          obj: { ...page, items: [bob], total: 1 },
+        } as never;
+      const outside = candidate(1, 'alice@test', false, p.scopeSearch !== 'bob');
+      return {
+        success: true,
+        obj: { ...page, items: [outside, bob] },
+      } as never;
+    });
+    const post = vi.spyOn(HttpUtil, 'post').mockResolvedValue({
+      success: true,
+      obj: { jobId: 'job-9' },
+    } as never);
+    const close = vi.fn();
+    renderWithProviders(<AttachExistingClientsModal open target={inbound(8)} onClose={close} />);
+    await screen.findByText('alice@test');
+    const searchBox = screen.getByRole('searchbox', { name: /search/i });
+    fireEvent.change(searchBox, { target: { value: 'bob' } });
+    await waitFor(() => expect(screen.queryByText('alice@test')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: /select all eligible clients/i }));
+    await waitFor(() =>
+      expect((screen.getByRole('checkbox', { name: 'bob@test' }) as HTMLInputElement).checked).toBe(
+        true,
+      ),
+    );
+    expect(get).toHaveBeenCalledWith(
+      url,
+      expect.objectContaining({ inboundIds: '8', freeze: true, search: 'bob' }),
+      expect.anything(),
+    );
+
+    fireEvent.change(searchBox, { target: { value: '' } });
+    const aliceBox = (await screen.findByRole('checkbox', {
+      name: 'alice@test',
+    })) as HTMLInputElement;
+    expect(aliceBox.checked).toBe(false);
+    expect(aliceBox.disabled).toBe(true);
+    expect((screen.getByRole('checkbox', { name: 'bob@test' }) as HTMLInputElement).checked).toBe(
+      true,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^attach clients to/i }));
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
+    expect(post).toHaveBeenCalledExactlyOnceWith(
+      '/panel/api/clients/bulkAttach',
+      {
+        inboundIds: [8],
+        selection: {
+          mode: 'allMatching',
+          sourceId: 0,
+          scopeToken: 'bob-token',
+          excludedClientIds: [],
+          search: 'bob',
+          group: '',
         },
       },
       expect.anything(),
