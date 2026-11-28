@@ -163,6 +163,16 @@ jobs:
             exit 1
           fi
 
+      - name: PostgreSQL attach candidate selection
+        run: |
+          set -o pipefail
+          go test ./internal/web/service -run '^Test(AttachCandidatesSelection|FrozenAttachSelectionFollowsFilter)Postgres$' -count=1 -v | tee /tmp/postgres-attach-selection.log
+          passed=$(grep -c -- '^--- PASS' /tmp/postgres-attach-selection.log || true)
+          if [ "$passed" -ne 2 ]; then
+            echo "expected 2 passing PostgreSQL attach selection tests, got $passed" >&2
+            exit 1
+          fi
+
       - name: PostgreSQL depletion query regressions
         run: |
           set -o pipefail
