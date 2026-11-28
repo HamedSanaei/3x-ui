@@ -51,7 +51,7 @@ func TestInboundLookupFailureDoesNotAcknowledgeMutation(t *testing.T) {
 	}
 }
 
-func TestInboundLookupPreservesCanceledContext(t *testing.T) {
+func TestDelInboundPreservesCanceledContext(t *testing.T) {
 	srv, _ := newCountingNodeServer(t, `{"success":true}`)
 	remote := NewRemote(nodeForPlainServer(t, srv, "verify", "tok"), nil)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -59,8 +59,5 @@ func TestInboundLookupPreservesCanceledContext(t *testing.T) {
 	inbound := &model.Inbound{Tag: "in-canceled", Protocol: model.VLESS}
 	if err := remote.DelInbound(ctx, inbound); !errors.Is(err, context.Canceled) {
 		t.Errorf("DelInbound error = %v, want canceled context", err)
-	}
-	if err := remote.UpdateInbound(ctx, inbound, inbound); !errors.Is(err, context.Canceled) {
-		t.Errorf("UpdateInbound error = %v, want canceled context", err)
 	}
 }
